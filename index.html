@@ -1,1 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF to Text Converter with OCR Option</title>
+  
+  <!-- Using latest version links from CDN for automatic version updates -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.5.141/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@latest/dist/tesseract.min.js"></script>
+  
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    #output { white-space: pre-wrap; background-color: #f4f4f4; padding: 10px; border-radius: 5px; margin-top: 20px; }
+  </style>
+</head>
+<body>
 
+  <h1>PDF to Text Converter with OCR Option</h1>
+
+  <p>Select a PDF file to convert to text. This tool supports OCR for scanned PDFs and allows previewing the first 5 pages before processing the entire document.</p>
+
+  <p><strong>Security Considerations:</strong> This service runs entirely on your device, so the PDF is processed locally and never uploaded to a server. This minimizes security risks and protects your data privacy. Note:
+    <ul>
+      <li>Converting to text reduces most risks, but avoid using untrusted files.</li>
+      <li>Extracted text may not match the formatting of the original PDF, especially for complex documents.</li>
+    </ul>
+  </p>
+
+  <input type="file" id="pdfFile" accept="application/pdf">
+  <div>
+    <label><input type="checkbox" id="useOCR" checked> Convert with OCR (use for scanned PDFs)</label><br>
+    <label><input type="checkbox" id="previewFirstFive" checked> Preview first 5 pages only</label>
+  </div>
+  <button onclick="convertPDFtoText()">Convert to Text</button>
+
+  <div id="output">Text will appear here after conversion...</div>
+
+  <script>
+    async function convertPDFtoText() {
+      const fileInput = document.getElementById('pdfFile');
+      const useOCR = document.getElementById('useOCR').checked;
+      const previewFirstFive = document.getElementById('previewFirstFive').checked;
+      const outputDiv = document.getElementById('output');
+      outputDiv.textContent = "Processing...";
+
+      if (!fileInput.files[0]) {
+        outputDiv.textContent = "Please select a PDF file.";
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const arrayBuffer = await file.arrayBuffer();
+      const typedArray = new Uint8Array(arrayBuffer);
+
+      const pdf = await pdfjsLib.getDocument(typedArray).promise;
+      let extractedText = '';
+      const maxPages = previewFirstFive ? Math.min(5, pdf.numPages) : pdf.numPages;
+
+      for (let i = 1; i <= maxPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1 });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext("2d");
+
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+        if (useOCR) {
+          // Perform OCR on the image data from the canvas
+          const dataURL = canvas.toDataURL("image/png");
+          const text = await Tesseract.recognize(dataURL, 'eng', {
+            logger: (m) => console.log(m)
+          }).then(({ data: { text } }) => text);
+          extractedText += text + "\n\n";
+        } else {
+          // Extract text directly without OCR
+          const textContent = await page.getTextContent();
+          textContent.items.forEach(item => {
+            extractedText += item.str + ' ';
+          });
+          extractedText += "\n\n";
+        }
+      }
+
+      outputDiv.textContent = extractedText || "No text detected.";
+    }
+  </script>
+
+</body>
+</html>
